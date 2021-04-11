@@ -7,7 +7,7 @@ import json
 
 import requests
 
-import brokerbase
+from . import brokerbase
 
 
 REDIRECT_URL = "https://127.0.0.1:42068/callback"
