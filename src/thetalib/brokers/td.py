@@ -4,10 +4,12 @@ import urllib.parse
 import threading
 import webbrowser
 import json
+from decimal import Decimal
 
 import requests
+import dateutil.parser
 
-from . import brokerbase
+from thetalib.brokers import brokerbase
 
 
 REDIRECT_URL = "https://127.0.0.1:42068/callback"
@@ -73,7 +75,76 @@ class TdAPI:
         return self._request('get', path)
 
 
+class TdTrade(brokerbase.Trade):
+    """
+    Trade class for TD.
+    """
+
+    def __init__(self, api_object):
+        if api_object['type'] != 'TRADE':
+            raise ValueError("TdTrade only understands TRADE objects")
+
+        self.api_object = api_object
+        self.transaction_datetime = dateutil.parser.parse(
+            api_object['transactionDate'])
+        self.order_datetime = dateutil.parser.parse(
+            api_object['orderDate'])
+        self.settlement_date = dateutil.parser.parse(
+            api_object['settlementDate']).date()
+        self.instruction = self._get_instruction()
+        self.asset_type = self._get_asset_type()
+        self.option_type = self._get_option_type()
+        self.position_effect = self._get_position_effect()
+        self.fees_and_commissions = self._get_fees_and_commission()
+        self.quantity = api_object['transactionItem']['amount']
+        self.price = Decimal(str(api_object['transactionItem']['price']))
+
+        instrument = api_object['transactionItem']['instrument']
+        if self.asset_type == brokerbase.Trade.AssetType.EQUITY:
+            self.symbol = instrument['symbol']
+            self.option_expiration = None
+        else:
+            self.symbol = instrument['underlyingSymbol']
+            self.option_expiration = dateutil.parser.parse(
+                instrument['optionExpirationDate'])
+
+    def _get_instruction(self):
+        instruction = self.api_object['transactionItem']['instruction']
+        if instruction == 'BUY':
+            return brokerbase.Trade.Instruction.BUY
+        return brokerbase.Trade.Instruction.SELL
+
+    def _get_asset_type(self):
+        atype = self.api_object['transactionItem']['instrument']['assetType']
+        if atype == 'OPTION':
+            return brokerbase.Trade.AssetType.OPTION
+        return brokerbase.Trade.AssetType.EQUITY
+
+    def _get_option_type(self):
+        if self.asset_type == brokerbase.Trade.AssetType.EQUITY:
+            return None
+        otype = self.api_object['transactionItem']['instrument']['putCall']
+        if otype == 'CALL':
+            return brokerbase.Trade.OptionType.CALL
+        return brokerbase.Trade.OptionType.PUT
+
+    def _get_position_effect(self):
+        if self.asset_type == brokerbase.Trade.AssetType.EQUITY:
+            return None
+        peffect = self.api_object['transactionItem']['positionEffect']
+        if peffect == 'OPENING':
+            return brokerbase.Trade.Effect.OPEN
+        return brokerbase.Trade.Effect.CLOSE
+
+    def _get_fees_and_commission(self):
+        return sum(Decimal(str(f)) for f in self.api_object['fees'].values())
+
+
 class BrokerTd(brokerbase.Broker):
+    """
+    Broker class for TD.
+    """
+
     def __init__(self, access_token, test_data=None):
         self._api = TdAPI(access_token)
         self._account_info = None
@@ -92,7 +163,10 @@ class BrokerTd(brokerbase.Broker):
         return self._api.get(f'accounts/{self._account_id}/transactions')
 
     def get_trades(self, since=None):
-        return self._get_transactions()
+        return [
+            TdTrade(t)
+            for t in self._get_transactions() if t['type'] == 'TRADE'
+        ]
 
 
 def _main():
@@ -100,7 +174,7 @@ def _main():
     test_data = json.loads(open(sys.argv[2]).read())
     broker = BrokerTd(access_token, test_data)
     print("Trades:")
-    print(broker.get_trades())
+    print('\n'.join(str(t) for t in broker.get_trades()))
 
 
 if __name__ == "__main__":
