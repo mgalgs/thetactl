@@ -1,8 +1,13 @@
 import sys
 import argparse
 
+from colorama import init as colorama_init
+
 import thetalib.config
 from thetalib.brokers import get_broker_providers
+
+
+colorama_init()
 
 
 def cmd_list_brokers(config):
