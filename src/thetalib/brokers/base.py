@@ -6,40 +6,44 @@ from decimal import Decimal
 import pytz
 
 
+class Effect(Enum):
+    OPEN = 1
+    CLOSE = 2
+
+    def __str__(self):
+        return "OPEN" if self == Effect.OPEN else "CLOSE"
+
+
+class Instruction(Enum):
+    BUY = 1
+    SELL = 2
+
+    def __str__(self):
+        return "BUY" if self == Instruction.BUY else "SELL"
+
+
+class AssetType(Enum):
+    EQUITY = 1
+    OPTION = 2
+
+    def __str__(self):
+        return "EQUITY" if self == AssetType.EQUITY \
+            else "OPTION"
+
+
+class OptionType(Enum):
+    PUT = 1
+    CALL = 2
+
+    def __str__(self):
+        return "PUT" if self == OptionType.PUT else "CALL"
+
+
 @dataclass
 class Trade:
     """
     Represents a single trade.
     """
-
-    class Effect(Enum):
-        OPEN = 1
-        CLOSE = 2
-
-        def __str__(self):
-            return "OPEN" if self.value == Trade.Effect.OPEN else "CLOSE"
-
-    class Instruction(Enum):
-        BUY = 1
-        SELL = 2
-
-        def __str__(self):
-            return "BUY" if self.value == Trade.Instruction.BUY else "SELL"
-
-    class AssetType(Enum):
-        EQUITY = 1
-        OPTION = 2
-
-        def __str__(self):
-            return "EQUITY" if self.value == Trade.AssetType.EQUITY \
-                else "OPTION"
-
-    class OptionType(Enum):
-        PUT = 1
-        CALL = 2
-
-        def __str__(self):
-            return "PUT" if self.value == Trade.OptionType.PUT else "CALL"
 
     api_object: str
     transaction_datetime: datetime.datetime
@@ -62,7 +66,7 @@ class Trade:
             return (self.option_expiration - now).days
 
     def __str__(self):
-        if self.asset_type == Trade.AssetType.EQUITY:
+        if self.asset_type == AssetType.EQUITY:
             return (f"[{self.symbol}] {self.instruction} {self.quantity} "
                     f"@{self.price}")
         dte = self.dte
@@ -135,7 +139,7 @@ class Broker:
     def print_options_profitability(self):
         options_trades = [
             t for t in self.get_trades()
-            if t.asset_type == Trade.AssetType.OPTION
+            if t.asset_type == AssetType.OPTION
         ]
         for trade in options_trades:
             print(trade)

@@ -1,4 +1,5 @@
 import sys
+import os
 import http.server
 import urllib.parse
 import threading
@@ -9,7 +10,14 @@ from decimal import Decimal
 import requests
 import dateutil.parser
 
-from thetalib.brokers.base import Trade, Broker
+from thetalib.brokers.base import (
+    AssetType,
+    Broker,
+    Effect,
+    Instruction,
+    OptionType,
+    Trade,
+)
 
 
 REDIRECT_URL = "https://127.0.0.1:42068/callback"
@@ -85,56 +93,59 @@ class TdTrade(Trade):
             raise ValueError("TdTrade only understands TRADE objects")
 
         self.api_object = api_object
-        self.transaction_datetime = dateutil.parser.parse(
-            api_object['transactionDate'])
-        self.order_datetime = dateutil.parser.parse(
-            api_object['orderDate'])
-        self.settlement_date = dateutil.parser.parse(
-            api_object['settlementDate']).date()
-        self.instruction = self._get_instruction()
-        self.asset_type = self._get_asset_type()
-        self.option_type = self._get_option_type()
-        self.position_effect = self._get_position_effect()
-        self.fees_and_commissions = self._get_fees_and_commission()
-        self.quantity = api_object['transactionItem']['amount']
-        self.price = Decimal(str(api_object['transactionItem']['price']))
-
+        asset_type = self._get_asset_type()
         instrument = api_object['transactionItem']['instrument']
-        if self.asset_type == Trade.AssetType.EQUITY:
-            self.symbol = instrument['symbol']
-            self.option_expiration = None
+        if asset_type == AssetType.EQUITY:
+            symbol = instrument['symbol']
+            option_expiration = None
         else:
-            self.symbol = instrument['underlyingSymbol']
-            self.option_expiration = dateutil.parser.parse(
+            symbol = instrument['underlyingSymbol']
+            option_expiration = dateutil.parser.parse(
                 instrument['optionExpirationDate'])
+
+        super().__init__(
+            api_object,
+            dateutil.parser.parse(api_object['transactionDate']),
+            dateutil.parser.parse(api_object['orderDate']),
+            dateutil.parser.parse(api_object['settlementDate']).date(),
+            self._get_instruction(),
+            asset_type,
+            self._get_option_type(asset_type),
+            self._get_position_effect(asset_type),
+            self._get_fees_and_commission(),
+            api_object['transactionItem']['amount'],
+            Decimal(str(api_object['transactionItem']['price'])),
+            symbol,
+            option_expiration,
+        )
 
     def _get_instruction(self):
         instruction = self.api_object['transactionItem']['instruction']
         if instruction == 'BUY':
-            return Trade.Instruction.BUY
-        return Trade.Instruction.SELL
+            return Instruction.BUY
+        return Instruction.SELL
 
     def _get_asset_type(self):
         atype = self.api_object['transactionItem']['instrument']['assetType']
         if atype == 'OPTION':
-            return Trade.AssetType.OPTION
-        return Trade.AssetType.EQUITY
+            return AssetType.OPTION
+        return AssetType.EQUITY
 
-    def _get_option_type(self):
-        if self.asset_type == Trade.AssetType.EQUITY:
+    def _get_option_type(self, asset_type):
+        if asset_type == AssetType.EQUITY:
             return None
         otype = self.api_object['transactionItem']['instrument']['putCall']
         if otype == 'CALL':
-            return Trade.OptionType.CALL
-        return Trade.OptionType.PUT
+            return OptionType.CALL
+        return OptionType.PUT
 
-    def _get_position_effect(self):
-        if self.asset_type == Trade.AssetType.EQUITY:
+    def _get_position_effect(self, asset_type):
+        if asset_type == AssetType.EQUITY:
             return None
         peffect = self.api_object['transactionItem']['positionEffect']
         if peffect == 'OPENING':
-            return Trade.Effect.OPEN
-        return Trade.Effect.CLOSE
+            return Effect.OPEN
+        return Effect.CLOSE
 
     def _get_fees_and_commission(self):
         return sum(Decimal(str(f)) for f in self.api_object['fees'].values())
@@ -147,13 +158,17 @@ class BrokerTd(Broker):
 
     provider_name = "td"
 
-    def __init__(self, access_token, test_data=None):
+    def __init__(self, access_token, test_file=None):
         super().__init__()
         self.access_token = access_token
         self._api = TdAPI(access_token)
         self._account_info = None
-        self._test_data = test_data
         self._trades = None
+        self._test_data = None
+        self._test_file = test_file
+        if test_file is not None:
+            with open(os.path.expanduser(test_file)) as f:
+                self._test_data = json.loads(f.read())
 
     @property
     def _account_id(self):
@@ -177,30 +192,34 @@ class BrokerTd(Broker):
 
     @classmethod
     def from_config(cls, config):
-        return cls(
-            config["data"]["access_token"],
-        )
+        cdata = config["data"]
+        if "file" in cdata:
+            return cls(None, test_file=cdata["file"])
+        return cls(cdata["access_token"])
 
     def to_config(self):
-        return {
-            "access_token": self.access_token,
-        }
+        if self._test_file is not None:
+            config = {"file": self._test_file}
+        else:
+            config = {"access_token": self.access_token}
+        return config
 
     @classmethod
     def UI_add(cls):
         print("Initializing TD")
         print("Please enter your TD API access token:")
-        access_token = input(" >> ")
-        config = {
-            "access_token": access_token,
-        }
-        return cls.from_config(config)
+        # (or path to test file)
+        ipt = input(" >> ")
+        if os.path.isfile(os.path.expanduser(ipt)):
+            config = {"file": ipt}
+        else:
+            config = {"access_token": ipt}
+        return cls.from_config({"data": config})
 
 
 def _main():
     access_token = sys.argv[1]
-    test_data = json.loads(open(sys.argv[2]).read())
-    broker = BrokerTd(access_token, test_data)
+    broker = BrokerTd(access_token, test_file=sys.argv[2])
     print("Trades:")
     print('\n'.join(str(t) for t in broker.get_trades()))
 
