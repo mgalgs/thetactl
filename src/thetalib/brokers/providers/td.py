@@ -109,11 +109,13 @@ class TdTrade(Trade):
             symbol = instrument['symbol']
             option_expiration = None
             strike = None
+            option_symbol = None
         else:
             symbol = instrument['underlyingSymbol']
             option_expiration = dateutil.parser.parse(
                 instrument['optionExpirationDate'])
             strike = option_symbol_parse_strike(instrument['symbol'])
+            option_symbol = instrument['symbol']
 
         super().__init__(
             api_object,
@@ -130,6 +132,7 @@ class TdTrade(Trade):
             symbol,
             option_expiration,
             strike,
+            option_symbol,
         )
 
     def _get_instruction(self):

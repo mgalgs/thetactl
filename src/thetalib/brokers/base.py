@@ -5,6 +5,7 @@ import datetime
 from decimal import Decimal
 from collections import defaultdict
 import logging
+import typing
 
 import pytz
 from tabulate import tabulate
@@ -75,12 +76,22 @@ class Trade:
     symbol: str
     option_expiration: datetime.datetime
     strike: Decimal
+    option_symbol: str
 
     @property
     def dte(self):
         now = datetime.datetime.now(pytz.utc)
         if self.option_expiration > now:
             return (self.option_expiration - now).days
+
+    @property
+    def cost(self):
+        """
+        price * quantity. Positive for OPEN, negative for CLOSE.
+        """
+        sign = -1 if self.instruction == Instruction.BUY else 1
+        multiplier = 100 if self.asset_type == AssetType.OPTION else 1
+        return self.price * self.quantity * sign * multiplier
 
     def __str__(self):
         if self.asset_type == AssetType.EQUITY:
@@ -161,8 +172,15 @@ class Broker:
                 continue
             by_symbol[t.symbol].append(t)
         for symbol, trades in sorted(by_symbol.items(), key=lambda el: el[0]):
-            print_wheel_sequence_for_symbol(symbol, trades)
-            print()
+            print(f"{Style.BRIGHT}{Fore.LIGHTMAGENTA_EX}{symbol}{Style.RESET_ALL}")
+            trades = sorted(trades, key=lambda t: t.transaction_datetime)
+            summary, full_table = get_trade_grid(symbol, trades)
+            csummary, condensed_table = get_trade_sequence(symbol, trades)
+            print(f"\n{Style.BRIGHT}Trade grid:{Style.RESET_ALL}")
+            print(full_table)
+            print(f"\n{Style.BRIGHT}Trade sequences:{Style.RESET_ALL}")
+            print(condensed_table)
+            print("\n" + summary)
 
 
 def deltastr(num, include_sign=True, currency=False):
@@ -177,7 +195,8 @@ def deltastr(num, include_sign=True, currency=False):
         b4 = Fore.RED
     signage = '+' if include_sign else ''
     b4 += '$' if currency else ''
-    return f'{b4}{num:{signage}}{Style.RESET_ALL}'
+    numfmt = ',.0f' if currency else ''
+    return f'{b4}{num:{signage}{numfmt}}{Style.RESET_ALL}'
 
 
 def pdeltastr(num, include_sign=True, currency=False):
@@ -190,18 +209,11 @@ def pdeltastr(num, include_sign=True, currency=False):
     return f' ({deltastr(num, include_sign=include_sign, currency=currency)})'
 
 
-def print_wheel_sequence_for_symbol(symbol: str, trades: list[Trade]):
-    trades = sorted(trades, key=lambda t: t.transaction_datetime)
+def get_trade_grid(
+        symbol: str, trades: list[Trade]) -> typing.Tuple[str, str]:
 
-    print(f"{Style.BRIGHT}{symbol}{Style.RESET_ALL}")
-
-    call_short_interest = 0
-    put_short_interest = 0
-    call_long_interest = 0
-    put_long_interest = 0
-    call_profits = 0
-    put_profits = 0
     rows = []
+    total_profits = 0
     for trade in trades:
         call_long_interest_delta = 0
         call_short_interest_delta = 0
@@ -235,23 +247,17 @@ def print_wheel_sequence_for_symbol(symbol: str, trades: list[Trade]):
             put_long_interest_delta = -100 * trade.quantity
             put_profits_delta = trade.price * trade.quantity * 100
 
-        call_long_interest += call_long_interest_delta
-        call_short_interest += call_short_interest_delta
-        put_long_interest += put_long_interest_delta
-        put_short_interest += put_short_interest_delta
-        call_profits += call_profits_delta
-        put_profits += put_profits_delta
-        total_profits = call_profits + put_profits
+        total_profits += call_profits_delta + put_profits_delta
         total_profits_delta = call_profits_delta + put_profits_delta
 
         rows.append((
             str(trade),
-            f"{call_long_interest}{pdeltastr(call_long_interest_delta)}",
-            f"{call_short_interest}{pdeltastr(call_short_interest_delta)}",
-            f"{put_long_interest}{pdeltastr(put_long_interest_delta)}",
-            f"{put_short_interest}{pdeltastr(put_short_interest_delta)}",
-            f"{call_profits}{pdeltastr(call_profits_delta, include_sign=False, currency=True)}",
-            f"{put_profits}{pdeltastr(put_profits_delta, include_sign=False, currency=True)}",
+            f"{pdeltastr(call_long_interest_delta)}",
+            f"{pdeltastr(call_short_interest_delta)}",
+            f"{pdeltastr(put_long_interest_delta)}",
+            f"{pdeltastr(put_short_interest_delta)}",
+            f"{pdeltastr(call_profits_delta, include_sign=False, currency=True)}",
+            f"{pdeltastr(put_profits_delta, include_sign=False, currency=True)}",
             f"{total_profits}{pdeltastr(total_profits_delta, include_sign=False, currency=True)}",
         ))
 
@@ -265,27 +271,64 @@ def print_wheel_sequence_for_symbol(symbol: str, trades: list[Trade]):
         "Puts Profits",
         "Total Options Profits",
     )
-    print(tabulate(rows, headers=headers, tablefmt="orgtbl"))
+    table = tabulate(rows, headers=headers, tablefmt="orgtbl")
 
-    call_open_interest = call_long_interest - call_short_interest
-    if call_open_interest > 0:
-        coi_color = Fore.GREEN
-    elif call_open_interest == 0:
-        coi_color = Style.RESET_ALL
-    else:
-        coi_color = Fore.RED
-    coi = f"{coi_color}{call_open_interest}{Style.RESET_ALL}"
+    summary = (f"{Style.BRIGHT}Summary{Style.RESET_ALL}: "
+               f"Total profits={deltastr(total_profits, currency=True)}")
 
-    put_open_interest = put_long_interest - put_short_interest
-    if put_open_interest > 0:
-        poi_color = Fore.GREEN
-    elif call_open_interest == 0:
-        poi_color = Style.RESET_ALL
-    else:
-        poi_color = Fore.RED
-    poi = f"{poi_color}{put_open_interest}{Style.RESET_ALL}"
+    return summary, table
 
-    print(f"{Style.BRIGHT}{symbol} Summary{Style.RESET_ALL}: "
-          f"Open Call Interest={coi}, "
-          f"Open Put Interest={poi}, "
-          f"Total profits={deltastr(total_profits, currency=True)}")
+
+def get_trade_sequence(
+        symbol: str, trades: list[Trade]) -> str:
+    trades_by_option = defaultdict(list)
+
+    for trade in trades:
+        trades_by_option[trade.option_symbol].append(trade)
+
+    rows = []
+    total_profit = 0
+    for option_symbol, otrades in trades_by_option.items():
+        trade_sequence = []
+        profit = 0
+        interest = 0
+        option_expiration = otrades[0].option_expiration
+        for trade in otrades:
+            profit += trade.cost
+            b_or_s = 'B' if trade.instruction == Instruction.BUY else 'S'
+            o_or_c = 'O' if trade.position_effect == PositionEffect.OPEN \
+                else 'C'
+
+            pos = (trade.instruction, trade.position_effect)
+            if pos == (Instruction.BUY, PositionEffect.OPEN):
+                interest += trade.quantity * 100
+            elif pos == (Instruction.BUY, PositionEffect.CLOSE):
+                interest -= trade.quantity * 100
+            elif pos == (Instruction.SELL, PositionEffect.OPEN):
+                interest -= trade.quantity * 100
+            elif pos == (Instruction.SELL, PositionEffect.CLOSE):
+                interest += trade.quantity * 100
+
+            if trade.position_effect == PositionEffect.OPEN:
+                effect = Fore.RED
+            else:
+                effect = Fore.GREEN
+            trade_sequence.append(
+                f"{effect}{b_or_s}/{o_or_c} "
+                f"{trade.quantity}x{trade.price}={trade.cost}"
+                f"{Style.RESET_ALL}"
+            )
+
+        total_profit += profit
+        seq = ' -> '.join(trade_sequence)
+        profit_s = deltastr(profit, currency=True)
+        interest_s = ''
+        if option_expiration.date() > datetime.date.today():
+            interest_s = f", open interest={deltastr(interest)}"
+            profit_s = f"{Style.DIM}{profit_s}{Style.RESET_ALL}"
+            seq += ' ...'
+        rows.append(f"{option_symbol} [profit={profit_s}{interest_s}] :: "
+                    f"{seq}")
+
+    summary = f"Total profit: {deltastr(total_profit, currency=True)}"
+    return summary, '\n'.join(rows)
