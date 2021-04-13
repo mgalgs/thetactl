@@ -13,7 +13,7 @@ import dateutil.parser
 from thetalib.brokers.base import (
     AssetType,
     Broker,
-    Effect,
+    PositionEffect,
     Instruction,
     OptionType,
     Trade,
@@ -144,8 +144,8 @@ class TdTrade(Trade):
             return None
         peffect = self.api_object['transactionItem']['positionEffect']
         if peffect == 'OPENING':
-            return Effect.OPEN
-        return Effect.CLOSE
+            return PositionEffect.OPEN
+        return PositionEffect.CLOSE
 
     def _get_fees_and_commission(self):
         return sum(Decimal(str(f)) for f in self.api_object['fees'].values())

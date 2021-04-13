@@ -7,12 +7,12 @@ from collections import defaultdict
 import pytz
 
 
-class Effect(Enum):
+class PositionEffect(Enum):
     OPEN = 1
     CLOSE = 2
 
     def __str__(self):
-        return "OPEN" if self == Effect.OPEN else "CLOSE"
+        return "OPEN" if self == PositionEffect.OPEN else "CLOSE"
 
 
 class Instruction(Enum):
@@ -53,7 +53,7 @@ class Trade:
     instruction: Instruction
     asset_type: AssetType
     option_type: OptionType
-    position_effect: Effect
+    position_effect: PositionEffect
     fees_and_commissions: Decimal
     quantity: int
     price: Decimal
