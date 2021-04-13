@@ -9,7 +9,7 @@ from decimal import Decimal
 import requests
 import dateutil.parser
 
-from thetalib.brokers import brokerbase
+from thetalib.brokers.base import Trade, Broker
 
 
 REDIRECT_URL = "https://127.0.0.1:42068/callback"
@@ -75,7 +75,7 @@ class TdAPI:
         return self._request('get', path)
 
 
-class TdTrade(brokerbase.Trade):
+class TdTrade(Trade):
     """
     Trade class for TD.
     """
@@ -100,7 +100,7 @@ class TdTrade(brokerbase.Trade):
         self.price = Decimal(str(api_object['transactionItem']['price']))
 
         instrument = api_object['transactionItem']['instrument']
-        if self.asset_type == brokerbase.Trade.AssetType.EQUITY:
+        if self.asset_type == Trade.AssetType.EQUITY:
             self.symbol = instrument['symbol']
             self.option_expiration = None
         else:
@@ -111,44 +111,49 @@ class TdTrade(brokerbase.Trade):
     def _get_instruction(self):
         instruction = self.api_object['transactionItem']['instruction']
         if instruction == 'BUY':
-            return brokerbase.Trade.Instruction.BUY
-        return brokerbase.Trade.Instruction.SELL
+            return Trade.Instruction.BUY
+        return Trade.Instruction.SELL
 
     def _get_asset_type(self):
         atype = self.api_object['transactionItem']['instrument']['assetType']
         if atype == 'OPTION':
-            return brokerbase.Trade.AssetType.OPTION
-        return brokerbase.Trade.AssetType.EQUITY
+            return Trade.AssetType.OPTION
+        return Trade.AssetType.EQUITY
 
     def _get_option_type(self):
-        if self.asset_type == brokerbase.Trade.AssetType.EQUITY:
+        if self.asset_type == Trade.AssetType.EQUITY:
             return None
         otype = self.api_object['transactionItem']['instrument']['putCall']
         if otype == 'CALL':
-            return brokerbase.Trade.OptionType.CALL
-        return brokerbase.Trade.OptionType.PUT
+            return Trade.OptionType.CALL
+        return Trade.OptionType.PUT
 
     def _get_position_effect(self):
-        if self.asset_type == brokerbase.Trade.AssetType.EQUITY:
+        if self.asset_type == Trade.AssetType.EQUITY:
             return None
         peffect = self.api_object['transactionItem']['positionEffect']
         if peffect == 'OPENING':
-            return brokerbase.Trade.Effect.OPEN
-        return brokerbase.Trade.Effect.CLOSE
+            return Trade.Effect.OPEN
+        return Trade.Effect.CLOSE
 
     def _get_fees_and_commission(self):
         return sum(Decimal(str(f)) for f in self.api_object['fees'].values())
 
 
-class BrokerTd(brokerbase.Broker):
+class BrokerTd(Broker):
     """
     Broker class for TD.
     """
 
+    provider_name = "td"
+
     def __init__(self, access_token, test_data=None):
+        super().__init__()
+        self.access_token = access_token
         self._api = TdAPI(access_token)
         self._account_info = None
         self._test_data = test_data
+        self._trades = None
 
     @property
     def _account_id(self):
@@ -162,11 +167,34 @@ class BrokerTd(brokerbase.Broker):
             return self._test_data
         return self._api.get(f'accounts/{self._account_id}/transactions')
 
-    def get_trades(self, since=None):
-        return [
-            TdTrade(t)
-            for t in self._get_transactions() if t['type'] == 'TRADE'
-        ]
+    def get_trades(self):
+        if self._trades is None:
+            self._trades = [
+                TdTrade(t)
+                for t in self._get_transactions() if t['type'] == 'TRADE'
+            ]
+        return self._trades
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(
+            config["data"]["access_token"],
+        )
+
+    def to_config(self):
+        return {
+            "access_token": self.access_token,
+        }
+
+    @classmethod
+    def UI_add(cls):
+        print("Initializing TD")
+        print("Please enter your TD API access token:")
+        access_token = input(" >> ")
+        config = {
+            "access_token": access_token,
+        }
+        return cls.from_config(config)
 
 
 def _main():

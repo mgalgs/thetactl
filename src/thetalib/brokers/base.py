@@ -3,7 +3,6 @@ from enum import Enum
 import datetime
 from decimal import Decimal
 
-import dateutil.parser
 import pytz
 
 
@@ -77,7 +76,66 @@ class Trade:
 class Broker:
     """
     Abstraction for interacting with broker APIs.
+
+    Subclasses must set:
+
+    - provider_name
+
+    and must override:
+
+    - get_trades
+    - from_config
+    - to_config
+    - UI_add
     """
 
-    def get_trades(self, since=None):
+    providers = []
+
+    def __init__(self):
+        self._trades = None
+
+    def __str__(self):
+        return self.provider_name
+
+    @classmethod
+    def __init_subclass__(cls):
+        cls.providers.append(cls)
+
+    def get_trades(self):
+        """
+        Returns a list of Trade objects for this broker. Caching in subclasses
+        is recommended.
+        """
         raise NotImplementedError
+
+    @classmethod
+    def from_config(cls, config):
+        """
+        Converts a config dictionary (deserialized from the configuration
+        layer) into a broker object.
+        """
+        raise NotImplementedError
+
+    def to_config(self):
+        """
+        Serializes broker configuration into a config dictionary (which will be
+        serialized for storage to disk by the configuration layer).
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def UI_add(cls):
+        """
+        Interactively collect any configuration necessary to configure this
+        broker (access token, etc.) and returns an initialized broker
+        object.
+        """
+        raise NotImplementedError
+
+    def print_options_profitability(self):
+        options_trades = [
+            t for t in self.get_trades()
+            if t.asset_type == Trade.AssetType.OPTION
+        ]
+        for trade in options_trades:
+            print(trade)
