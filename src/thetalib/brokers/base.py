@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 import datetime
 from decimal import Decimal
+from collections import defaultdict
 
 import pytz
 
@@ -105,7 +106,7 @@ class Broker:
     def __init_subclass__(cls):
         cls.providers.append(cls)
 
-    def get_trades(self):
+    def get_trades(self) -> Trade:
         """
         Returns a list of Trade objects for this broker. Caching in subclasses
         is recommended.
@@ -141,5 +142,10 @@ class Broker:
             t for t in self.get_trades()
             if t.asset_type == AssetType.OPTION
         ]
-        for trade in options_trades:
-            print(trade)
+        by_symbol = defaultdict(list)
+        for t in options_trades:
+            by_symbol[t.symbol].append(t)
+        for symbol, trades in sorted(by_symbol.items(), key=lambda el: el[0]):
+            print(symbol)
+            for trade in sorted(trades, key=lambda t: t.option_expiration):
+                print(trade)
