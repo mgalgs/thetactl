@@ -20,15 +20,17 @@ def cmd_add_broker(config):
     print("Add broker")
     providers = get_broker_providers()
     provider_names = list(providers.keys())
+    print("Please make a selection:")
     for i, name in enumerate(provider_names):
-        print(f"{i+1} {name}")
-    idx = input("Select broker >> ")
-    try:
-        idx = int(idx)
-        provider = providers[provider_names[idx - 1]]
-    except Exception:
-        print("Invalid choice")
-        sys.exit(1)
+        print(f"  ({i+1}) {name}")
+    while True:
+        idx = input(" >> ")
+        try:
+            idx = int(idx)
+            provider = providers[provider_names[idx - 1]]
+            break
+        except Exception:
+            print("Invalid choice")
     new_broker = provider.UI_add()
     config.merge_broker(new_broker)
     config.persist()

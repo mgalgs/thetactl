@@ -23,18 +23,11 @@ from thetalib.brokers.base import (
 
 REDIRECT_URL = "https://127.0.0.1:42068/callback"
 
-# I'm so sorry
-KEEP_RUNNING = True
-
-
-def _keep_running():
-    return KEEP_RUNNING
-
 
 class TdAuth():
     def __init__(self, consumer_key):
         self._consumer_key = consumer_key
-        super().__init__(self)
+        super().__init__()
 
     def get_access_token(self):
         server = threading.Thread(target=self._start_server)
@@ -54,14 +47,15 @@ class TdAuth():
         server.join()
 
     def _start_server(self):
-        class Server(http.server.BaseHTTPRequestHandler):
+        class MyRequestHandler(http.server.BaseHTTPRequestHandler):
+            keep_running = True
+
             def do_GET(self):
-                if False:
-                    KEEP_RUNNING = False
+                MyRequestHandler.keep_running = False
 
         address = ('', 42068)
-        httpd = http.server.HTTPServer(address, Server)
-        while _keep_running():
+        httpd = http.server.HTTPServer(address, MyRequestHandler)
+        while MyRequestHandler.keep_running:
             httpd.handle_request()
 
 
@@ -222,14 +216,31 @@ class BrokerTd(Broker):
 
     @classmethod
     def UI_add(cls):
+        print()
         print("Initializing TD")
-        print("Please enter your TD API access token:")
-        # (or path to test file)
-        ipt = input(" >> ")
-        if os.path.isfile(os.path.expanduser(ipt)):
-            config = {"file": ipt}
+        print("Please make a selection:")
+        print("  (1) Configure automatically")
+        print("  (2) Enter token/test file manually")
+        selection = None
+        while selection not in ("1", "2"):
+            selection = input(" >> ")
+        if selection == "1":
+            print()
+            print("Please follow the TD API Getting Started guide [1] to")
+            print("create a developer account and an app with a callback")
+            print(f"URL of {REDIRECT_URL}")
+            print("Then paste your app's consumer key here:")
+            print("[1] https://developer.tdameritrade.com/content/getting-started")
+            print()
+            consumer_key = input(" >> ")
+            access_token = get_access_token(consumer_key)
         else:
-            config = {"access_token": ipt}
+            print("Please enter your TD API access token:")
+            access_token = input(" >> ")
+        if os.path.isfile(os.path.expanduser(access_token)):
+            config = {"file": access_token}
+        else:
+            config = {"access_token": access_token}
         return cls.from_config({"data": config})
 
 
