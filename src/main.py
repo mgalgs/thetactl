@@ -30,17 +30,21 @@ def cmd_add_broker(config):
     print("Saved")
 
 
-def cmd_analyze_options(config):
+def cmd_analyze_options(config, rest):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("symbols", nargs="*")
+    args = parser.parse_args(rest)
     print("Options profitability tracking")
+    symbols = set([s.upper() for s in args.symbols])
     for broker in config.brokers:
-        broker.print_options_profitability()
+        broker.print_options_profitability(symbols)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command",
                         help="list-brokers, add-broker, analyze-options")
-    args = parser.parse_args()
+    args, rest = parser.parse_known_args()
     cmd = args.command
 
     config = thetalib.config.get_user_config()
@@ -50,7 +54,7 @@ def main():
     elif cmd == "add-broker":
         return cmd_add_broker(config)
     elif cmd == "analyze-options":
-        return cmd_analyze_options(config)
+        return cmd_analyze_options(config, rest)
     else:
         parser.print_help()
         sys.exit(1)

@@ -1,10 +1,23 @@
+import os
 from dataclasses import dataclass
 from enum import Enum
 import datetime
 from decimal import Decimal
 from collections import defaultdict
+import logging
 
 import pytz
+from tabulate import tabulate
+
+from thetalib import config
+
+
+logging.basicConfig(
+    filename=os.path.join(config.get_user_data_dir(), 'thetactl.log'),
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class PositionEffect(Enum):
@@ -137,15 +150,108 @@ class Broker:
         """
         raise NotImplementedError
 
-    def print_options_profitability(self):
+    def print_options_profitability(self, symbols=None):
         options_trades = [
             t for t in self.get_trades()
             if t.asset_type == AssetType.OPTION
         ]
         by_symbol = defaultdict(list)
         for t in options_trades:
+            if symbols and t.symbol not in symbols:
+                continue
             by_symbol[t.symbol].append(t)
         for symbol, trades in sorted(by_symbol.items(), key=lambda el: el[0]):
-            print(symbol)
-            for trade in sorted(trades, key=lambda t: t.option_expiration):
-                print(trade)
+            print_wheel_sequence_for_symbol(symbol, trades)
+
+
+def print_wheel_sequence_for_symbol(symbol: str, trades: list[Trade]):
+    trades = sorted(trades, key=lambda t: t.transaction_datetime)
+    call_short_interest = 0
+    put_short_interest = 0
+    call_long_interest = 0
+    put_long_interest = 0
+    call_profits = 0
+    put_profits = 0
+    rows = []
+    logger.info("Trade sequence for %s", symbol)
+    for trade in trades:
+        pos = (trade.instruction, trade.option_type, trade.position_effect)
+        if pos == (Instruction.BUY, OptionType.CALL, PositionEffect.OPEN):
+            call_long_interest += 100
+            profits_delta = -trade.price * trade.quantity * 100
+            call_profits += profits_delta
+            logger.info((f"Long call open {trade.quantity}@{trade.price} "
+                         f"(LI={call_long_interest}, "
+                         f"profits={call_profits} ({profits_delta}))"))
+        elif pos == (Instruction.BUY, OptionType.CALL, PositionEffect.CLOSE):
+            call_short_interest -= 100
+            profits_delta = -trade.price * trade.quantity * 100
+            call_profits += profits_delta
+            logger.info((f"Short call close {trade.quantity}@{trade.price} "
+                         f"(SI={call_short_interest}, "
+                         f"profits={call_profits} ({profits_delta}))"))
+        elif pos == (Instruction.BUY, OptionType.PUT, PositionEffect.OPEN):
+            put_long_interest += 100
+            profits_delta = -trade.price * trade.quantity * 100
+            put_profits += profits_delta
+            logger.info((f"Long put open {trade.quantity}@{trade.price} "
+                         f"(LI={put_long_interest}, "
+                         f"profits={put_profits} ({profits_delta}))"))
+        elif pos == (Instruction.BUY, OptionType.PUT, PositionEffect.CLOSE):
+            put_short_interest -= 100
+            profits_delta = -trade.price * trade.quantity * 100
+            put_profits += profits_delta
+            logger.info((f"Short put close {trade.quantity}@{trade.price} "
+                         f"(SI={put_short_interest}, "
+                         f"profits={put_profits} ({profits_delta}))"))
+        elif pos == (Instruction.SELL, OptionType.CALL, PositionEffect.OPEN):
+            call_short_interest += 100
+            profits_delta = trade.price * trade.quantity * 100
+            call_profits += profits_delta
+            logger.info((f"Short call open {trade.quantity}@{trade.price} "
+                         f"(SI={call_short_interest}, "
+                         f"profits={call_profits} ({profits_delta}))"))
+        elif pos == (Instruction.SELL, OptionType.CALL, PositionEffect.CLOSE):
+            call_long_interest -= 100
+            profits_delta = trade.price * trade.quantity * 100
+            call_profits += profits_delta
+            logger.info((f"Long call close {trade.quantity}@{trade.price} "
+                         f"(LI={call_long_interest}, "
+                         f"profits={call_profits} ({profits_delta}))"))
+        elif pos == (Instruction.SELL, OptionType.PUT, PositionEffect.OPEN):
+            put_short_interest += 100
+            profits_delta = trade.price * trade.quantity * 100
+            put_profits += profits_delta
+            logger.info((f"Short put open {trade.quantity}@{trade.price} "
+                         f"(SI={put_short_interest}, "
+                         f"profits={put_profits} ({profits_delta}))"))
+        elif pos == (Instruction.SELL, OptionType.PUT, PositionEffect.CLOSE):
+            put_long_interest -= 100
+            profits_delta = trade.price * trade.quantity * 100
+            put_profits += profits_delta
+            logger.info((f"Long put close {trade.quantity}@{trade.price} "
+                         f"(LI={put_long_interest}, "
+                         f"profits={put_profits} ({profits_delta}))"))
+
+        rows.append((
+            str(trade),
+            call_long_interest,
+            call_short_interest,
+            put_long_interest,
+            put_short_interest,
+            call_profits,
+            put_profits,
+            call_profits + put_profits,
+        ))
+
+    headers = (
+        "Trade",
+        "Call Long Interest",
+        "Call Short Interest",
+        "Put Long Interest",
+        "Put Short Interest",
+        "Call Profits",
+        "Put Profits",
+        "Total Options Profits",
+    )
+    print(tabulate(rows, headers=headers))

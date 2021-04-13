@@ -3,8 +3,6 @@ import json
 import appdirs
 import errno
 
-from thetalib.brokers import get_broker_providers
-
 
 """
 
@@ -30,10 +28,12 @@ class UserConfig:
 
     @staticmethod
     def _get_config_path():
-        config_dir = appdirs.user_data_dir('thetactl', 'mgalgs')
+        config_dir = get_user_data_dir()
         return os.path.join(config_dir, 'config.json')
 
     def __init__(self):
+        from thetalib.brokers import get_broker_providers
+
         self._config_path = self._get_config_path()
 
         try:
@@ -68,3 +68,7 @@ class UserConfig:
 
 def get_user_config():
     return UserConfig()
+
+
+def get_user_data_dir():
+    return appdirs.user_data_dir('thetactl', 'mgalgs')
