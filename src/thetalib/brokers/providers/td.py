@@ -6,6 +6,7 @@ import threading
 import webbrowser
 import json
 from decimal import Decimal
+import re
 
 import requests
 import dateutil.parser
@@ -83,6 +84,15 @@ class TdAPI:
         return self._request('get', path)
 
 
+def option_symbol_parse_strike(option_symbol):
+    """
+    Given "CHPT_041621C30", returns Decimal('30')
+    """
+    match = re.search(r'[PC]{1}([0-9]+)', option_symbol)
+    if match:
+        return Decimal(match.group(1))
+
+
 class TdTrade(Trade):
     """
     Trade class for TD.
@@ -98,10 +108,12 @@ class TdTrade(Trade):
         if asset_type == AssetType.EQUITY:
             symbol = instrument['symbol']
             option_expiration = None
+            strike = None
         else:
             symbol = instrument['underlyingSymbol']
             option_expiration = dateutil.parser.parse(
                 instrument['optionExpirationDate'])
+            strike = option_symbol_parse_strike(instrument['symbol'])
 
         super().__init__(
             api_object,
@@ -117,6 +129,7 @@ class TdTrade(Trade):
             Decimal(str(api_object['transactionItem']['price'])),
             symbol,
             option_expiration,
+            strike,
         )
 
     def _get_instruction(self):

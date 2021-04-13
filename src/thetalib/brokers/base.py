@@ -8,6 +8,7 @@ import logging
 
 import pytz
 from tabulate import tabulate
+from colorama import init as colorama_init, Fore, Back, Style
 
 from thetalib import config
 
@@ -18,6 +19,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+colorama_init()
 
 
 class PositionEffect(Enum):
@@ -72,6 +74,7 @@ class Trade:
     price: Decimal
     symbol: str
     option_expiration: datetime.datetime
+    strike: Decimal
 
     @property
     def dte(self):
@@ -83,12 +86,9 @@ class Trade:
         if self.asset_type == AssetType.EQUITY:
             return (f"[{self.symbol}] {self.instruction} {self.quantity} "
                     f"@{self.price}")
-        dte = self.dte
-        ret = (f"[{self.symbol}] {self.instruction} to "
-               f"{self.position_effect} @{self.price}")
-        if dte is not None:
-            ret += f" ({dte} DTE)"
-        return ret
+        return (f"[{self.symbol} {self.strike} {self.option_type}] "
+                f"{self.instruction} to "
+                f"{self.position_effect} {self.quantity}@{self.price}")
 
 
 class Broker:
@@ -162,10 +162,39 @@ class Broker:
             by_symbol[t.symbol].append(t)
         for symbol, trades in sorted(by_symbol.items(), key=lambda el: el[0]):
             print_wheel_sequence_for_symbol(symbol, trades)
+            print()
+
+
+def deltastr(num, include_sign=True, currency=False):
+    """
+    Returns num colored green for positive, red for negative.
+    """
+    if num == 0:
+        return ''
+    elif num > 0:
+        b4 = Fore.GREEN
+    elif num < 0:
+        b4 = Fore.RED
+    signage = '+' if include_sign else ''
+    b4 += '$' if currency else ''
+    return f'{b4}{num:{signage}}{Style.RESET_ALL}'
+
+
+def pdeltastr(num, include_sign=True, currency=False):
+    """
+    Returns empty string if num is 0, else deltastr of num wrapped in
+    parens and leading space.
+    """
+    if num == 0:
+        return ''
+    return f' ({deltastr(num, include_sign=include_sign, currency=currency)})'
 
 
 def print_wheel_sequence_for_symbol(symbol: str, trades: list[Trade]):
     trades = sorted(trades, key=lambda t: t.transaction_datetime)
+
+    print(f"{Style.BRIGHT}{symbol}{Style.RESET_ALL}")
+
     call_short_interest = 0
     put_short_interest = 0
     call_long_interest = 0
@@ -173,85 +202,90 @@ def print_wheel_sequence_for_symbol(symbol: str, trades: list[Trade]):
     call_profits = 0
     put_profits = 0
     rows = []
-    logger.info("Trade sequence for %s", symbol)
     for trade in trades:
+        call_long_interest_delta = 0
+        call_short_interest_delta = 0
+        call_profits_delta = 0
+        put_long_interest_delta = 0
+        put_short_interest_delta = 0
+        put_profits_delta = 0
         pos = (trade.instruction, trade.option_type, trade.position_effect)
         if pos == (Instruction.BUY, OptionType.CALL, PositionEffect.OPEN):
-            call_long_interest += 100
-            profits_delta = -trade.price * trade.quantity * 100
-            call_profits += profits_delta
-            logger.info((f"Long call open {trade.quantity}@{trade.price} "
-                         f"(LI={call_long_interest}, "
-                         f"profits={call_profits} ({profits_delta}))"))
+            call_long_interest_delta = 100 * trade.quantity
+            call_profits_delta = -trade.price * trade.quantity * 100
         elif pos == (Instruction.BUY, OptionType.CALL, PositionEffect.CLOSE):
-            call_short_interest -= 100
-            profits_delta = -trade.price * trade.quantity * 100
-            call_profits += profits_delta
-            logger.info((f"Short call close {trade.quantity}@{trade.price} "
-                         f"(SI={call_short_interest}, "
-                         f"profits={call_profits} ({profits_delta}))"))
+            call_short_interest_delta = -100 * trade.quantity
+            call_profits_delta = -trade.price * trade.quantity * 100
         elif pos == (Instruction.BUY, OptionType.PUT, PositionEffect.OPEN):
-            put_long_interest += 100
-            profits_delta = -trade.price * trade.quantity * 100
-            put_profits += profits_delta
-            logger.info((f"Long put open {trade.quantity}@{trade.price} "
-                         f"(LI={put_long_interest}, "
-                         f"profits={put_profits} ({profits_delta}))"))
+            put_long_interest_delta = 100 * trade.quantity
+            put_profits_delta = -trade.price * trade.quantity * 100
         elif pos == (Instruction.BUY, OptionType.PUT, PositionEffect.CLOSE):
-            put_short_interest -= 100
-            profits_delta = -trade.price * trade.quantity * 100
-            put_profits += profits_delta
-            logger.info((f"Short put close {trade.quantity}@{trade.price} "
-                         f"(SI={put_short_interest}, "
-                         f"profits={put_profits} ({profits_delta}))"))
+            put_short_interest_delta = -100 * trade.quantity
+            put_profits_delta = -trade.price * trade.quantity * 100
         elif pos == (Instruction.SELL, OptionType.CALL, PositionEffect.OPEN):
-            call_short_interest += 100
-            profits_delta = trade.price * trade.quantity * 100
-            call_profits += profits_delta
-            logger.info((f"Short call open {trade.quantity}@{trade.price} "
-                         f"(SI={call_short_interest}, "
-                         f"profits={call_profits} ({profits_delta}))"))
+            call_short_interest_delta = 100 * trade.quantity
+            call_profits_delta = trade.price * trade.quantity * 100
         elif pos == (Instruction.SELL, OptionType.CALL, PositionEffect.CLOSE):
-            call_long_interest -= 100
-            profits_delta = trade.price * trade.quantity * 100
-            call_profits += profits_delta
-            logger.info((f"Long call close {trade.quantity}@{trade.price} "
-                         f"(LI={call_long_interest}, "
-                         f"profits={call_profits} ({profits_delta}))"))
+            call_long_interest_delta = -100 * trade.quantity
+            call_profits_delta = trade.price * trade.quantity * 100
         elif pos == (Instruction.SELL, OptionType.PUT, PositionEffect.OPEN):
-            put_short_interest += 100
-            profits_delta = trade.price * trade.quantity * 100
-            put_profits += profits_delta
-            logger.info((f"Short put open {trade.quantity}@{trade.price} "
-                         f"(SI={put_short_interest}, "
-                         f"profits={put_profits} ({profits_delta}))"))
+            put_short_interest_delta = 100 * trade.quantity
+            put_profits_delta = trade.price * trade.quantity * 100
         elif pos == (Instruction.SELL, OptionType.PUT, PositionEffect.CLOSE):
-            put_long_interest -= 100
-            profits_delta = trade.price * trade.quantity * 100
-            put_profits += profits_delta
-            logger.info((f"Long put close {trade.quantity}@{trade.price} "
-                         f"(LI={put_long_interest}, "
-                         f"profits={put_profits} ({profits_delta}))"))
+            put_long_interest_delta = -100 * trade.quantity
+            put_profits_delta = trade.price * trade.quantity * 100
+
+        call_long_interest += call_long_interest_delta
+        call_short_interest += call_short_interest_delta
+        put_long_interest += put_long_interest_delta
+        put_short_interest += put_short_interest_delta
+        call_profits += call_profits_delta
+        put_profits += put_profits_delta
+        total_profits = call_profits + put_profits
+        total_profits_delta = call_profits_delta + put_profits_delta
 
         rows.append((
             str(trade),
-            call_long_interest,
-            call_short_interest,
-            put_long_interest,
-            put_short_interest,
-            call_profits,
-            put_profits,
-            call_profits + put_profits,
+            f"{call_long_interest}{pdeltastr(call_long_interest_delta)}",
+            f"{call_short_interest}{pdeltastr(call_short_interest_delta)}",
+            f"{put_long_interest}{pdeltastr(put_long_interest_delta)}",
+            f"{put_short_interest}{pdeltastr(put_short_interest_delta)}",
+            f"{call_profits}{pdeltastr(call_profits_delta, include_sign=False, currency=True)}",
+            f"{put_profits}{pdeltastr(put_profits_delta, include_sign=False, currency=True)}",
+            f"{total_profits}{pdeltastr(total_profits_delta, include_sign=False, currency=True)}",
         ))
 
     headers = (
         "Trade",
-        "Call Long Interest",
-        "Call Short Interest",
-        "Put Long Interest",
-        "Put Short Interest",
-        "Call Profits",
-        "Put Profits",
+        "Long Calls",
+        "Short Calls",
+        "Long Puts",
+        "Short Puts",
+        "Calls Profits",
+        "Puts Profits",
         "Total Options Profits",
     )
-    print(tabulate(rows, headers=headers))
+    print(tabulate(rows, headers=headers, tablefmt="orgtbl"))
+
+    call_open_interest = call_long_interest - call_short_interest
+    if call_open_interest > 0:
+        coi_color = Fore.GREEN
+    elif call_open_interest == 0:
+        coi_color = Style.RESET_ALL
+    else:
+        coi_color = Fore.RED
+    coi = f"{coi_color}{call_open_interest}{Style.RESET_ALL}"
+
+    put_open_interest = put_long_interest - put_short_interest
+    if put_open_interest > 0:
+        poi_color = Fore.GREEN
+    elif call_open_interest == 0:
+        poi_color = Style.RESET_ALL
+    else:
+        poi_color = Fore.RED
+    poi = f"{poi_color}{put_open_interest}{Style.RESET_ALL}"
+
+    print(f"{Style.BRIGHT}{symbol} Summary{Style.RESET_ALL}: "
+          f"Open Call Interest={coi}, "
+          f"Open Put Interest={poi}, "
+          f"Total profits={deltastr(total_profits, currency=True)}")
