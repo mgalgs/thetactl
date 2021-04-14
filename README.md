@@ -48,6 +48,6 @@ Analyze options activity for a specific set of symbols:
 
 ## Limitations
 
-We currently don't have any access token auto-refreshing in place, and TD
-access tokens only last for 30 minutes, so you have to remove and re-add
-your TD broker account every 30 minutes :sob:
+We currently don't have any refresh token auto-refreshing in place, and TD
+refresh tokens only last for 90 days, so for now you have to remove and
+re-add your TD broker account every 90 days :sob:
