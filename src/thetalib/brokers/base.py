@@ -105,7 +105,7 @@ class Trade:
         return (f"{self.symbol} "
                 f"{self.option_expiration.date()} "
                 f"{self.strike:4} {self.option_type:4} "
-                f"{self.ieffect}")
+                f"{self.ieffect} {self.quantity}@{self.price:<6}")
 
 
 class Broker:
