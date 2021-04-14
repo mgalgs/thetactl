@@ -9,6 +9,7 @@ import json
 from decimal import Decimal
 import re
 import datetime
+import logging
 
 import requests
 import dateutil.parser
@@ -26,7 +27,18 @@ from thetalib.brokers.providers.selfsigned import generate_selfsigned_cert
 from thetalib.config import get_user_data_dir
 
 
+logging.basicConfig(
+    filename=os.path.join(get_user_data_dir(), 'thetactl.log'),
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
+
 REDIRECT_URL = "https://127.0.0.1:42068/callback"
+
+
+class TdAuthException(Exception):
+    pass
 
 
 class TdAuth():
@@ -38,7 +50,7 @@ class TdAuth():
         super().__init__()
 
     def get_access_tokens(self, refresh_token=None):
-        expires_in = None
+        expires_at = None
         if refresh_token is None:
             refresh_token, expires_in = self.get_new_refresh_token()
             expires_at = datetime.datetime.now(pytz.utc) \
@@ -254,10 +266,25 @@ class BrokerTd(Broker):
                 self._test_data = json.loads(f.read())
             return
 
-        self._api = TdAPI(config['data']['access_token'])
+        self._api = self._init_api()
+
         self._trades = None
         # TODO: check if config['data']['refresh_expires_at'] is coming
         # up, and if so, get a new refresh token.
+
+    def _init_api(self):
+        api = TdAPI(self.config['data']['access_token'])
+        if api.get('/v1/accounts').status_code != 200:
+            logger.info("Getting new access token")
+            ckey = self.config['data']['consumer_key']
+            rtoken = self.config['data']['refresh_token']
+            access_token = TdAuth(ckey).exchange_refresh_token(rtoken)
+            self.config['data']['access_token'] = access_token
+            api = TdAPI(access_token)
+            if api.get('/v1/accounts').status_code != 200:
+                logger.error("Couldn't get a working access_token D:")
+                raise TdAuthException()
+        return api
 
     def _get_transactions(self):
         if self._test_data:
