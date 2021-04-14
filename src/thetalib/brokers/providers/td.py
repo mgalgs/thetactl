@@ -330,7 +330,8 @@ class BrokerTd(Broker):
             "access_token": access_token,
             "refresh_token": refresh_token,
             "refresh_expires_at": refresh_expires_at,
-            "account_id": account["securitiesAccount"]["accountId"]
+            "account_id": account["securitiesAccount"]["accountId"],
+            "consumer_key": consumer_key,
         }
         return cls.from_config({"data": config_data, "name": account_name})
 
