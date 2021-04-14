@@ -38,6 +38,15 @@ def cmd_add_broker(config):
 
 
 def cmd_analyze_options(config, rest):
+def cmd_remove_broker(config, args):
+    if not args.account:
+        print("You must specify an account to remove with --account")
+        sys.exit(1)
+    config.remove_broker(args.account)
+    config.persist()
+    print("Saved")
+
+
     parser = argparse.ArgumentParser()
     parser.add_argument("symbols", nargs="*")
     args = parser.parse_args(rest)
@@ -60,6 +69,8 @@ def main():
         return cmd_list_brokers(config)
     elif cmd == "add-broker":
         return cmd_add_broker(config)
+    elif cmd == "remove-broker":
+        return cmd_remove_broker(config, args)
     elif cmd == "analyze-options":
         return cmd_analyze_options(config, rest)
     else:
