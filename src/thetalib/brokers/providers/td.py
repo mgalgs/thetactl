@@ -8,9 +8,11 @@ import webbrowser
 import json
 from decimal import Decimal
 import re
+import datetime
 
 import requests
 import dateutil.parser
+import pytz
 
 from thetalib.brokers.base import (
     AssetType,
@@ -36,9 +38,14 @@ class TdAuth():
         super().__init__()
 
     def get_access_tokens(self, refresh_token=None):
-        refresh_token = refresh_token or self.get_new_refresh_token()
+        expires_in = None
+        if refresh_token is None:
+            refresh_token, expires_in = self.get_new_refresh_token()
+            expires_at = datetime.datetime.now(pytz.utc) \
+                + datetime.timedelta(seconds=expires_in)
+            expires_at = int((expires_at).timestamp())
         access_token = self.exchange_refresh_token(refresh_token)
-        return refresh_token, access_token
+        return refresh_token, expires_at, access_token
 
     def get_new_refresh_token(self):
         server = threading.Thread(target=self._start_server)
@@ -67,7 +74,7 @@ class TdAuth():
         }
         rsp = requests.post(TdAuth.TOKEN_URL, data=data)
         rdata = rsp.json()
-        return rdata['refresh_token']
+        return rdata['refresh_token'], rdata['refresh_token_expires_in']
 
     def exchange_refresh_token(self, refresh_token):
         data = {
@@ -249,6 +256,8 @@ class BrokerTd(Broker):
 
         self._api = TdAPI(config['data']['access_token'])
         self._trades = None
+        # TODO: check if config['data']['refresh_expires_at'] is coming
+        # up, and if so, get a new refresh token.
 
     def _get_transactions(self):
         if self._test_data:
@@ -295,31 +304,35 @@ class BrokerTd(Broker):
             print("[1] https://developer.tdameritrade.com/content/getting-started")
             print()
             consumer_key = input(" >> ")
-            refresh_token, access_token = get_access_tokens(consumer_key)
+            (refresh_token, refresh_expires_at, access_token) \
+                = get_access_tokens(consumer_key)
         else:
             print("Please enter your TD API access token:")
             access_token = input(" >> ")
-        if os.path.isfile(os.path.expanduser(access_token)):
-            config = {"file": access_token}
-        else:
-            accounts = TdAPI(access_token).get('/v1/accounts').json()
-            print("Please select an account:")
-            for (i, account) in enumerate(accounts):
-                print(f"  ({i+1}) {account['securitiesAccount']['accountId']}")
-            while True:
-                try:
-                    acc_idx = int(input(" >> "))
-                    account = accounts[acc_idx - 1]
-                    break
-                except Exception:
-                    print("Invalid selection")
 
-            config = {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "account_id": account["securitiesAccount"]["accountId"]
-            }
-        return cls.from_config({"data": config, "name": account_name})
+        if os.path.isfile(os.path.expanduser(access_token)):
+            return cls.from_config({"data": {"file": access_token},
+                                    "name": account_name})
+
+        accounts = TdAPI(access_token).get('/v1/accounts').json()
+        print("Please select an account:")
+        for (i, account) in enumerate(accounts):
+            print(f"  ({i+1}) {account['securitiesAccount']['accountId']}")
+        while True:
+            try:
+                acc_idx = int(input(" >> "))
+                account = accounts[acc_idx - 1]
+                break
+            except Exception:
+                print("Invalid selection")
+
+        config_data = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "refresh_expires_at": refresh_expires_at,
+            "account_id": account["securitiesAccount"]["accountId"]
+        }
+        return cls.from_config({"data": config_data, "name": account_name})
 
 
 def _main():
