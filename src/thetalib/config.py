@@ -12,6 +12,7 @@ format (TODO: make a proper schema definition):
 {
   'brokers': [{
     'provider': 'td',
+    'name': 'account alias',
     'data': ... # provider-specific storage
   }, ...]
 }
