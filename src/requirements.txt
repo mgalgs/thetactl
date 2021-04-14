@@ -3,11 +3,14 @@ astroid==2.5.3
 autopep8==1.5.6
 backcall==0.2.0
 certifi==2020.12.5
+cffi==1.14.5
 chardet==4.0.0
 colorama==0.4.4
+cryptography==3.4.7
 decorator==5.0.6
 flake8==3.9.0
 idna==2.10
+ipdb==0.13.7
 ipython==7.22.0
 ipython-genutils==0.2.0
 isort==5.8.0
@@ -21,6 +24,7 @@ pluggy==0.13.1
 prompt-toolkit==3.0.18
 ptyprocess==0.7.0
 pycodestyle==2.6.0
+pycparser==2.20
 pydocstyle==6.0.0
 pyflakes==2.2.0
 Pygments==2.8.1

@@ -115,6 +115,7 @@ class Broker:
     Subclasses must set:
 
     - provider_name
+    - account_name
 
     and must override:
 
@@ -130,7 +131,7 @@ class Broker:
         self._trades = None
 
     def __str__(self):
-        return self.provider_name
+        return f"{self.account_name} ({self.provider_name})"
 
     @classmethod
     def __init_subclass__(cls):
@@ -159,7 +160,7 @@ class Broker:
         raise NotImplementedError
 
     @classmethod
-    def UI_add(cls):
+    def UI_add(cls, account_name):
         """
         Interactively collect any configuration necessary to configure this
         broker (access token, etc.) and returns an initialized broker

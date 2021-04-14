@@ -59,11 +59,29 @@ class UserConfig:
         with open(self._config_path, 'w+') as f:
             f.write(json.dumps(self.data))
 
+    def get_broker_config_by_name(self, name):
+        for broker_cfg in self.data['brokers']:
+            if broker_cfg['name'] == name:
+                return broker_cfg
+
+    def get_broker_by_name(self, name):
+        for broker in self.brokers:
+            if broker.account_name == name:
+                return broker
+
     def merge_broker(self, broker):
         self.data['brokers'].append({
             'provider': broker.provider_name,
+            'name': broker.account_name,
             'data': broker.to_config(),
         })
+
+    def remove_broker(self, account_name):
+        newbrokers = []
+        for broker_cfg in self.data['brokers']:
+            if broker_cfg['name'] != account_name:
+                newbrokers.append(broker_cfg)
+        self.data['brokers'] = newbrokers
 
 
 def get_user_config():

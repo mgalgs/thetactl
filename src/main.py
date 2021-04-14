@@ -31,13 +31,20 @@ def cmd_add_broker(config):
             break
         except Exception:
             print("Invalid choice")
-    new_broker = provider.UI_add()
+    accname = None
+    while True:
+        print("Please enter a name for the new account:")
+        accname = input(" >> ")
+        if not config.get_broker_config_by_name(accname):
+            break
+        print("A broker with that name already exists. "
+              "Please pick another name.")
+    new_broker = provider.UI_add(accname)
     config.merge_broker(new_broker)
     config.persist()
     print("Saved")
 
 
-def cmd_analyze_options(config, rest):
 def cmd_remove_broker(config, args):
     if not args.account:
         print("You must specify an account to remove with --account")
@@ -47,19 +54,34 @@ def cmd_remove_broker(config, args):
     print("Saved")
 
 
+def cmd_analyze_options(config, args, rest):
     parser = argparse.ArgumentParser()
     parser.add_argument("symbols", nargs="*")
-    args = parser.parse_args(rest)
+    subargs = parser.parse_args(rest)
     print("Options profitability tracking")
-    symbols = set([s.upper() for s in args.symbols])
-    for broker in config.brokers:
-        broker.print_options_profitability(symbols)
+    symbols = set([s.upper() for s in subargs.symbols])
+    broker = None
+    if args.account:
+        broker = config.get_broker_by_name(args.account)
+        if broker is None:
+            print(f"Couldn't find broker with name {args.account}")
+            print("Available broker accounts:")
+            cmd_list_brokers(config)
+            sys.exit(1)
+    else:
+        if len(config.brokers):
+            broker = config.brokers[0]
+        else:
+            print("No brokers configured. Please use the add-broker command.")
+            sys.exit(1)
+    broker.print_options_profitability(symbols)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command",
                         help="list-brokers, add-broker, analyze-options")
+    parser.add_argument("--account")
     args, rest = parser.parse_known_args()
     cmd = args.command
 
@@ -72,7 +94,7 @@ def main():
     elif cmd == "remove-broker":
         return cmd_remove_broker(config, args)
     elif cmd == "analyze-options":
-        return cmd_analyze_options(config, rest)
+        return cmd_analyze_options(config, args, rest)
     else:
         parser.print_help()
         sys.exit(1)
