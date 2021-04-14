@@ -45,3 +45,9 @@ Analyze all options activity on your account:
 Analyze options activity for a specific set of symbols:
 
     python thetactl.py analyze-options gme uuuu
+
+## Limitations
+
+We currently don't have any access token auto-refreshing in place, and TD
+access tokens only last for 30 minutes, so you have to remove and re-add
+your TD broker account every 30 minutes :sob:
