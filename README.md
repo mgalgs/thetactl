@@ -5,6 +5,8 @@
 `thetactl` is still in the alpha testing phase. Use at your own risk and
 [file issues](https://github.com/mgalgs/thetactl/issues) at will!
 
+![Screenshot](docs/screenshot.png)
+
 ## Installation
 
 `thetactl` requires Python 3.7 or later.
