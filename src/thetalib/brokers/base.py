@@ -121,7 +121,7 @@ class Broker:
 
     - get_trades
     - from_config
-    - to_config
+    - to_config_data
     - UI_add
     """
 
@@ -152,7 +152,7 @@ class Broker:
         """
         raise NotImplementedError
 
-    def to_config(self):
+    def to_config_data(self):
         """
         Serializes broker configuration into a config dictionary (which will be
         serialized for storage to disk by the configuration layer).

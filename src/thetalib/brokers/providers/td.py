@@ -28,12 +28,19 @@ REDIRECT_URL = "https://127.0.0.1:42068/callback"
 
 
 class TdAuth():
+    TOKEN_URL = "https://api.tdameritrade.com/v1/oauth2/token"
+
     def __init__(self, consumer_key):
         self._consumer_key = consumer_key
         self._returned_code = None
         super().__init__()
 
-    def get_access_token(self):
+    def get_access_tokens(self, refresh_token=None):
+        refresh_token = refresh_token or self.get_new_refresh_token()
+        access_token = self.exchange_refresh_token(refresh_token)
+        return refresh_token, access_token
+
+    def get_new_refresh_token(self):
         server = threading.Thread(target=self._start_server)
         server.setDaemon(True)
         server.start()
@@ -58,9 +65,22 @@ class TdAuth():
             'client_id': self._consumer_key,
             'redirect_uri': REDIRECT_URL,
         }
-        token_url = "https://api.tdameritrade.com/v1/oauth2/token"
-        rsp = requests.post(token_url, data=data)
-        return rsp.json()['access_token']
+        rsp = requests.post(TdAuth.TOKEN_URL, data=data)
+        rdata = rsp.json()
+        return rdata['refresh_token']
+
+    def exchange_refresh_token(self, refresh_token):
+        data = {
+            'grant_type': 'refresh_token',
+            'refresh_token': refresh_token,
+            'access_type': None,
+            'code': None,
+            'client_id': self._consumer_key,
+            'redirect_url': None,
+        }
+        rsp = requests.post(TdAuth.TOKEN_URL, data=data)
+        data = rsp.json()
+        return data['access_token']
 
     def _start_server(self):
         # LOOK AWAY!!! D:
@@ -101,8 +121,8 @@ class TdAuth():
         self._returned_code = MyRequestHandler.returned_code
 
 
-def get_access_token(consumer_key):
-    return TdAuth(consumer_key).get_access_token()
+def get_access_tokens(consumer_key):
+    return TdAuth(consumer_key).get_access_tokens()
 
 
 class TdAPI:
@@ -215,24 +235,26 @@ class BrokerTd(Broker):
 
     provider_name = "td"
 
-    def __init__(self, access_token, account_id, account_name, test_file=None):
+    def __init__(self, config, test_file=None):
         super().__init__()
-        self.access_token = access_token
-        self.account_name = account_name
-        self.account_id = account_id
-        self._api = TdAPI(access_token)
-        self._account_info = None
-        self._trades = None
+        self.config = config
+        self.account_name = config['name']
+
         self._test_data = None
         self._test_file = test_file
         if test_file is not None:
             with open(os.path.expanduser(test_file)) as f:
                 self._test_data = json.loads(f.read())
+            return
+
+        self._api = TdAPI(config['data']['access_token'])
+        self._trades = None
 
     def _get_transactions(self):
         if self._test_data:
             return self._test_data
-        url = f'/v1/accounts/{self.account_id}/transactions'
+        account_id = self.config['data']['account_id']
+        url = f'/v1/accounts/{account_id}/transactions'
         return self._api.get(url).json()
 
     def get_trades(self):
@@ -245,20 +267,14 @@ class BrokerTd(Broker):
 
     @classmethod
     def from_config(cls, config):
-        cdata = config["data"]
-        if "file" in cdata:
-            return cls(None, test_file=cdata["file"])
-        return cls(cdata["access_token"], cdata["account_id"], config["name"])
+        if "file" in config["data"]:
+            return cls(None, test_file=config["data"]["file"])
+        return cls(config)
 
-    def to_config(self):
+    def to_config_data(self):
         if self._test_file is not None:
-            config = {"file": self._test_file}
-        else:
-            config = {
-                "access_token": self.access_token,
-                "account_id": self.account_id,
-            }
-        return config
+            return {"file": self._test_file}
+        return self.config['data']
 
     @classmethod
     def UI_add(cls, account_name):
@@ -279,7 +295,7 @@ class BrokerTd(Broker):
             print("[1] https://developer.tdameritrade.com/content/getting-started")
             print()
             consumer_key = input(" >> ")
-            access_token = get_access_token(consumer_key)
+            refresh_token, access_token = get_access_tokens(consumer_key)
         else:
             print("Please enter your TD API access token:")
             access_token = input(" >> ")
@@ -300,6 +316,7 @@ class BrokerTd(Broker):
 
             config = {
                 "access_token": access_token,
+                "refresh_token": refresh_token,
                 "account_id": account["securitiesAccount"]["accountId"]
             }
         return cls.from_config({"data": config, "name": account_name})
@@ -307,7 +324,7 @@ class BrokerTd(Broker):
 
 def _main():
     access_token = sys.argv[1]
-    broker = BrokerTd(access_token, test_file=sys.argv[2])
+    broker = BrokerTd(access_token, 'test', test_file=sys.argv[2])
     print("Trades:")
     print('\n'.join(str(t) for t in broker.get_trades()))
 

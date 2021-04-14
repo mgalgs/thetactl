@@ -74,7 +74,7 @@ class UserConfig:
         self.data['brokers'].append({
             'provider': broker.provider_name,
             'name': broker.account_name,
-            'data': broker.to_config(),
+            'data': broker.to_config_data(),
         })
 
     def remove_broker(self, account_name):
