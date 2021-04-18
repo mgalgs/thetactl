@@ -9,7 +9,8 @@
 
 ## Installation
 
-`thetactl` requires Python 3.7 or later.
+`thetactl` requires Python 3.7 or later. It has been tested on Mac OSX and
+Linux.
 
 Currently you need to clone this repo to use `thetactl`:
 
