@@ -18,7 +18,7 @@ Currently you need to clone this repo to use `thetactl`:
 then initialize the virtualenv:
 
     cd thetactl/src
-    python -m venv venv
+    python3 -m venv venv
     source venv/bin/activate
     pip install -r requirements.txt
 
