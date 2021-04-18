@@ -74,6 +74,9 @@ class TdAuth():
         print(f"Opening {url}")
         print("Please authorize the app from your web browser.")
         print("You may see a warning about using a self-signed certificate.")
+        print("If you're using chrome you might need to bypass certificate")
+        print("errors for localhost by enabling the option here:")
+        print("  chrome://flags/#allow-insecure-localhost")
         webbrowser.open(url)
         server.join()
         data = {
