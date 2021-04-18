@@ -6,6 +6,8 @@ from decimal import Decimal
 import logging
 
 import pytz
+import dateparser
+import tzlocal
 
 from thetalib import config
 
@@ -134,12 +136,31 @@ class Broker:
     def __init_subclass__(cls):
         cls.providers.append(cls)
 
-    def get_trades(self, symbols=None) -> list[Trade]:
+    def provider_get_trades(self, symbols=None, since=None) -> list[Trade]:
         """
         Returns a list of Trade objects for this broker. Caching in subclasses
         is recommended.
         """
         raise NotImplementedError
+
+    def get_trades(self, symbols=None, since=None, until=None) -> list[Trade]:
+        trades = self.provider_get_trades(symbols, since)
+        localtz = tzlocal.get_localzone()
+        if symbols:
+            trades = [t for t in trades if t.symbol in symbols]
+        if since:
+            since = localtz.localize(dateparser.parse(since))
+            trades = [t for t in trades if t.transaction_datetime >= since]
+        if until:
+            until = localtz.localize(dateparser.parse(until))
+            trades = [t for t in trades if t.transaction_datetime <= until]
+        return trades
+
+    def get_options_trades(self, symbols=None, since=None, until=None):
+        return [
+            t for t in self.get_trades(symbols, since=since, until=until)
+            if t.asset_type == AssetType.OPTION
+        ]
 
     @classmethod
     def from_config(cls, config):
@@ -164,9 +185,3 @@ class Broker:
         object.
         """
         raise NotImplementedError
-
-    def get_options_trades(self, symbols=None):
-        return [
-            t for t in self.get_trades(symbols)
-            if t.asset_type == AssetType.OPTION
-        ]

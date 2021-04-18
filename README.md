@@ -47,6 +47,14 @@ Analyze options activity for a specific set of symbols:
 
     python thetactl.py analyze-options gme uuuu
 
+Show the report for the past 3 weeks:
+
+    python thetactl.py analyze-options --since="3 weeks ago"
+
+Show February's report:
+
+    python thetactl.py analyze-options --since="Feb 1" --until="Mar 1"
+
 ## Limitations
 
 We currently don't have any refresh token auto-refreshing in place, and TD

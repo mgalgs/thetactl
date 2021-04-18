@@ -293,14 +293,12 @@ class BrokerTd(Broker):
         url = f'/v1/accounts/{account_id}/transactions'
         return self._api.get(url).json()
 
-    def get_trades(self, symbols=None):
+    def provider_get_trades(self, symbols=None, since=None):
         if self._trades is None:
             self._trades = [
                 TdTrade(t)
                 for t in self._get_transactions() if t['type'] == 'TRADE'
             ]
-        if symbols:
-            return [t for t in self._trades if t.symbol in symbols]
         return self._trades
 
     @classmethod

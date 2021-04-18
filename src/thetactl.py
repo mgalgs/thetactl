@@ -81,12 +81,17 @@ def cmd_remove_broker(config, args):
 
 
 @subcommand([argument("symbols", nargs="*",
-                      help=("Restrict report to these symbols"))],
+                      help=("Restrict report to these symbols")),
+             argument("--since",
+                      help="Only include trades since this date"),
+             argument("--until",
+                      help="Only include trades until this date")],
             help="Analyze options profitability")
 def cmd_analyze_options(config, args):
     print("Options profitability tracking")
     symbols = set([s.upper() for s in args.symbols])
     broker = None
+
     if args.account:
         broker = config.get_broker_by_name(args.account)
         if broker is None:
@@ -100,7 +105,10 @@ def cmd_analyze_options(config, args):
         else:
             print("No brokers configured. Please use the add-broker command.")
             sys.exit(1)
-    print(trade_grid(broker.get_options_trades(symbols)))
+
+    trades = broker.get_options_trades(symbols, since=args.since,
+                                       until=args.until)
+    print(trade_grid(trades))
 
 
 def main():
