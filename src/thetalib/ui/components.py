@@ -5,16 +5,11 @@ import typing
 from colorama import Fore, Style
 from tabulate import tabulate
 
-from thetalib.brokers.base import (
-    Instruction,
-    OptionType,
-    PositionEffect,
-    Trade,
-)
+from thetalib.brokers import Trade, Instruction, OptionType, PositionEffect
 from thetalib.numfmt import deltastr, pdeltastr
 
 
-def get_trade_grid(
+def _get_trade_grid(
         symbol: str, trades: list[Trade]) -> typing.Tuple[str, str]:
 
     rows = []
@@ -81,7 +76,7 @@ def get_trade_grid(
     return table, total_profits
 
 
-def get_trade_sequence(
+def _get_trade_sequence(
         symbol: str, trades: list[Trade]) -> str:
     trades_by_option = defaultdict(list)
 
@@ -134,3 +129,30 @@ def get_trade_sequence(
 
     summary = f"Total profit: {deltastr(total_profit, currency=True)}"
     return summary, '\n'.join(rows)
+
+
+def trade_grid(options_trades):
+    by_symbol = defaultdict(list)
+    for t in options_trades:
+        by_symbol[t.symbol].append(t)
+    profits_by_symbol = dict()
+    for symbol, trades in sorted(by_symbol.items(), key=lambda el: el[0]):
+        print(f"{Style.BRIGHT}{Fore.LIGHTMAGENTA_EX}{symbol}"
+              f"{Style.RESET_ALL}")
+        trades = sorted(trades, key=lambda t: t.transaction_datetime)
+        full_table, profits = _get_trade_grid(symbol, trades)
+        csummary, condensed_table = _get_trade_sequence(symbol, trades)
+        print(f"{Style.BRIGHT}Trade grid:{Style.RESET_ALL}")
+        print(full_table)
+        print(f"\n{Style.BRIGHT}Trade sequences:{Style.RESET_ALL}")
+        print(condensed_table)
+        profits_by_symbol[symbol] = profits
+        print()
+
+    print(f"---\n{Style.BRIGHT}Summary{Style.RESET_ALL}")
+    for symbol, profits in profits_by_symbol.items():
+        print(f"{Style.BRIGHT}{symbol:>5}:{Style.RESET_ALL} "
+              f"{deltastr(profits, currency=True)}")
+    total_profits_sum = sum(profits_by_symbol.values())
+    print(f"{Style.BRIGHT}Total: "
+          f"{deltastr(total_profits_sum, currency=True)}{Style.RESET_ALL}")

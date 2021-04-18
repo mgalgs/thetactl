@@ -1,4 +1,10 @@
-from thetalib.brokers.base import Broker
+from thetalib.brokers.base import (
+    Broker,
+    Trade,
+    Instruction,
+    OptionType,
+    PositionEffect,
+)
 from thetalib.brokers.providers import *
 
 

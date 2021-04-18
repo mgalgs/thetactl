@@ -3,14 +3,11 @@ from dataclasses import dataclass
 from enum import Enum
 import datetime
 from decimal import Decimal
-from collections import defaultdict
 import logging
 
 import pytz
-from colorama import Fore, Style
 
 from thetalib import config
-from thetalib.numfmt import deltastr
 
 
 logging.basicConfig(
@@ -137,7 +134,7 @@ class Broker:
     def __init_subclass__(cls):
         cls.providers.append(cls)
 
-    def get_trades(self) -> Trade:
+    def get_trades(self, symbols=None) -> list[Trade]:
         """
         Returns a list of Trade objects for this broker. Caching in subclasses
         is recommended.
@@ -168,36 +165,8 @@ class Broker:
         """
         raise NotImplementedError
 
-    def print_options_profitability(self, symbols=None):
-        from thetalib.brokers.analyze import get_trade_grid, get_trade_sequence
-
-        options_trades = [
-            t for t in self.get_trades()
+    def get_options_trades(self, symbols=None):
+        return [
+            t for t in self.get_trades(symbols)
             if t.asset_type == AssetType.OPTION
         ]
-        by_symbol = defaultdict(list)
-        for t in options_trades:
-            if symbols and t.symbol not in symbols:
-                continue
-            by_symbol[t.symbol].append(t)
-        profits_by_symbol = dict()
-        for symbol, trades in sorted(by_symbol.items(), key=lambda el: el[0]):
-            print(f"{Style.BRIGHT}{Fore.LIGHTMAGENTA_EX}{symbol}"
-                  f"{Style.RESET_ALL}")
-            trades = sorted(trades, key=lambda t: t.transaction_datetime)
-            full_table, profits = get_trade_grid(symbol, trades)
-            csummary, condensed_table = get_trade_sequence(symbol, trades)
-            print(f"{Style.BRIGHT}Trade grid:{Style.RESET_ALL}")
-            print(full_table)
-            print(f"\n{Style.BRIGHT}Trade sequences:{Style.RESET_ALL}")
-            print(condensed_table)
-            profits_by_symbol[symbol] = profits
-            print()
-
-        print(f"---\n{Style.BRIGHT}Summary{Style.RESET_ALL}")
-        for symbol, profits in profits_by_symbol.items():
-            print(f"{Style.BRIGHT}{symbol:>5}:{Style.RESET_ALL} "
-                  f"{deltastr(profits, currency=True)}")
-        total_profits_sum = sum(profits_by_symbol.values())
-        print(f"{Style.BRIGHT}Total: "
-              f"{deltastr(total_profits_sum, currency=True)}{Style.RESET_ALL}")

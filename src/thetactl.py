@@ -5,6 +5,7 @@ from colorama import init as colorama_init
 
 import thetalib.config
 from thetalib.brokers import get_broker_providers
+from thetalib.ui.components import trade_grid
 
 
 colorama_init()
@@ -74,7 +75,7 @@ def cmd_analyze_options(config, args, rest):
         else:
             print("No brokers configured. Please use the add-broker command.")
             sys.exit(1)
-    broker.print_options_profitability(symbols)
+    print(trade_grid(broker.get_options_trades(symbols)))
 
 
 def main():
