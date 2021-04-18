@@ -90,4 +90,10 @@ def get_user_config():
 
 
 def get_user_data_dir():
-    return appdirs.user_data_dir('thetactl', 'mgalgs')
+    user_data_dir = appdirs.user_data_dir('thetactl', 'mgalgs')
+    try:
+        os.makedirs(user_data_dir)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+    return user_data_dir
