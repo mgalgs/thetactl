@@ -9,15 +9,39 @@ from thetalib.ui.components import trade_grid
 
 
 colorama_init()
+cli = argparse.ArgumentParser()
+subparsers = cli.add_subparsers(dest="subcommand")
 
 
-def cmd_list_brokers(config):
+# some helpers for subcommands
+# https://mike.depalatis.net/blog/simplifying-argparse.html
+def fn_name_to_cmd_name(fn_name):
+    return fn_name.lstrip('cmd_').replace('_', '-')
+
+
+def subcommand(args=[], parent=subparsers, help=None):
+    def decorator(func):
+        name = fn_name_to_cmd_name(func.__name__)
+        parser = parent.add_parser(name, description=func.__doc__, help=help)
+        for arg in args:
+            parser.add_argument(*arg[0], **arg[1])
+        parser.set_defaults(func=func)
+    return decorator
+
+
+def argument(*name_or_flags, **kwargs):
+    return ([*name_or_flags], kwargs)
+
+
+@subcommand(help="List brokers")
+def cmd_list_brokers(config, args):
     print("Brokers")
     for broker in config.brokers:
         print(f"  - {broker}")
 
 
-def cmd_add_broker(config):
+@subcommand(help="Add broker")
+def cmd_add_broker(config, args):
     print("Add broker")
     providers = get_broker_providers()
     provider_names = list(providers.keys())
@@ -46,6 +70,7 @@ def cmd_add_broker(config):
     print("Saved")
 
 
+@subcommand(help="Remove broker")
 def cmd_remove_broker(config, args):
     if not args.account:
         print("You must specify an account to remove with --account")
@@ -55,12 +80,12 @@ def cmd_remove_broker(config, args):
     print("Saved")
 
 
-def cmd_analyze_options(config, args, rest):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("symbols", nargs="*")
-    subargs = parser.parse_args(rest)
+@subcommand([argument("symbols", nargs="*",
+                      help=("Restrict report to these symbols"))],
+            help="Analyze options profitability")
+def cmd_analyze_options(config, args):
     print("Options profitability tracking")
-    symbols = set([s.upper() for s in subargs.symbols])
+    symbols = set([s.upper() for s in args.symbols])
     broker = None
     if args.account:
         broker = config.get_broker_by_name(args.account)
@@ -79,26 +104,15 @@ def cmd_analyze_options(config, args, rest):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command",
-                        help="list-brokers, add-broker, analyze-options")
-    parser.add_argument("--account")
-    args, rest = parser.parse_known_args()
-    cmd = args.command
-
+    cli.add_argument("--account")
+    args = cli.parse_args()
+    cmd = args.subcommand
     config = thetalib.config.get_user_config()
 
-    if cmd == "list-brokers":
-        return cmd_list_brokers(config)
-    elif cmd == "add-broker":
-        return cmd_add_broker(config)
-    elif cmd == "remove-broker":
-        return cmd_remove_broker(config, args)
-    elif cmd == "analyze-options":
-        return cmd_analyze_options(config, args, rest)
+    if cmd is None:
+        cli.print_help()
     else:
-        parser.print_help()
-        sys.exit(1)
+        args.func(config, args)
 
 
 if __name__ == "__main__":
