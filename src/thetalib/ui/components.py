@@ -17,38 +17,36 @@ def _get_trade_grid(
     for trade in trades:
         call_long_interest_delta = 0
         call_short_interest_delta = 0
-        call_profits_delta = 0
         put_long_interest_delta = 0
         put_short_interest_delta = 0
-        put_profits_delta = 0
         pos = (trade.instruction, trade.option_type, trade.position_effect)
         if pos == (Instruction.BUY, OptionType.CALL, PositionEffect.OPEN):
-            call_long_interest_delta = 100 * trade.quantity
-            call_profits_delta = -trade.price * trade.quantity * 100
+            call_long_interest_delta = trade.quantity
         elif pos == (Instruction.BUY, OptionType.CALL, PositionEffect.CLOSE):
-            call_short_interest_delta = -100 * trade.quantity
-            call_profits_delta = -trade.price * trade.quantity * 100
+            call_short_interest_delta = -trade.quantity
         elif pos == (Instruction.BUY, OptionType.PUT, PositionEffect.OPEN):
-            put_long_interest_delta = 100 * trade.quantity
-            put_profits_delta = -trade.price * trade.quantity * 100
+            put_long_interest_delta = trade.quantity
         elif pos == (Instruction.BUY, OptionType.PUT, PositionEffect.CLOSE):
-            put_short_interest_delta = -100 * trade.quantity
-            put_profits_delta = -trade.price * trade.quantity * 100
+            put_short_interest_delta = -trade.quantity
         elif pos == (Instruction.SELL, OptionType.CALL, PositionEffect.OPEN):
-            call_short_interest_delta = 100 * trade.quantity
-            call_profits_delta = trade.price * trade.quantity * 100
+            call_short_interest_delta = trade.quantity
         elif pos == (Instruction.SELL, OptionType.CALL, PositionEffect.CLOSE):
-            call_long_interest_delta = -100 * trade.quantity
-            call_profits_delta = trade.price * trade.quantity * 100
+            call_long_interest_delta = -trade.quantity
         elif pos == (Instruction.SELL, OptionType.PUT, PositionEffect.OPEN):
-            put_short_interest_delta = 100 * trade.quantity
-            put_profits_delta = trade.price * trade.quantity * 100
+            put_short_interest_delta = trade.quantity
         elif pos == (Instruction.SELL, OptionType.PUT, PositionEffect.CLOSE):
-            put_long_interest_delta = -100 * trade.quantity
-            put_profits_delta = trade.price * trade.quantity * 100
+            put_long_interest_delta = -trade.quantity
 
-        total_profits += call_profits_delta + put_profits_delta
-        total_profits_delta = call_profits_delta + put_profits_delta
+        total_profits_delta = trade.price * trade.quantity * 100
+        if trade.instruction == Instruction.BUY:
+            total_profits_delta *= -1
+        total_profits += total_profits_delta
+        if trade.option_type == OptionType.CALL:
+            call_profits_delta = total_profits_delta
+            put_profits_delta = 0
+        else:
+            call_profits_delta = 0
+            put_profits_delta = total_profits_delta
 
         rows.append((
             str(trade),
@@ -94,13 +92,13 @@ def _get_trade_sequence(
             profit += trade.cost
             pos = (trade.instruction, trade.position_effect)
             if pos == (Instruction.BUY, PositionEffect.OPEN):
-                interest += trade.quantity * 100
+                interest += trade.quantity
             elif pos == (Instruction.BUY, PositionEffect.CLOSE):
-                interest += trade.quantity * 100
+                interest += trade.quantity
             elif pos == (Instruction.SELL, PositionEffect.OPEN):
-                interest -= trade.quantity * 100
+                interest -= trade.quantity
             elif pos == (Instruction.SELL, PositionEffect.CLOSE):
-                interest -= trade.quantity * 100
+                interest -= trade.quantity
 
             if trade.position_effect == PositionEffect.OPEN:
                 effect = Fore.RED
